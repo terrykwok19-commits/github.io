@@ -2158,7 +2158,7 @@ async function fetchData() {
   statusEl.className = 'data-status';
 
   try {
-    const apiUrl = "/api/interface/home/lotteryHistory?type=klb&page=1&limit=30";
+    const apiUrl = "https://api.huiniao.top/interface/home/lotteryHistory?type=klb&page=1&limit=30";
     const resp = await fetch(apiUrl, { signal: AbortSignal.timeout(20000) });
     if (!resp.ok) throw new Error('请求失败');
     const json = await resp.json();
