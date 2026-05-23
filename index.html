@@ -57,7 +57,7 @@ body {
 .container { max-width: 1400px; margin: 0 auto; padding: 20px 16px; }
 
 /* Tabs */
-.tabs { display: flex; gap: 6px; margin-bottom: 20px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+.tabs { display: flex; gap: 6px; margin-bottom: 20px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; min-height: 48px; }
 .tab-btn {
   background: var(--bg-mid);
   color: var(--fg-secondary);
@@ -66,11 +66,21 @@ body {
   border-radius: 24px;
   font-size: 14px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: grab;
   transition: all .25s;
   white-space: nowrap;
   flex-shrink: 0;
   box-shadow: var(--shadow-sm);
+  position: relative;
+}
+.tab-btn:active { cursor: grabbing; }
+.tab-btn.dragging {
+  opacity: 0.5;
+  transform: scale(1.05);
+}
+.tab-btn.drag-over {
+  border-color: var(--accent);
+  background: rgba(233,69,96,0.1);
 }
 .tab-btn.active {
   background: var(--accent);
@@ -190,6 +200,22 @@ body {
 .btn-generate {
   background: linear-gradient(135deg, #e94560, #c62828);
   color: #fff;
+}
+.btn-mode {
+  padding: 8px 16px;
+  border: 2px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--fg-secondary);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-mode:hover { border-color: var(--gold); color: var(--gold); }
+.btn-mode.active {
+  background: linear-gradient(135deg, var(--gold), #e6940a);
+  border-color: var(--gold);
+  color: #1a1a2e;
 }
 .btn-clear { background: var(--bg-light); color: var(--fg-primary); }
 .btn-random {
@@ -644,7 +670,6 @@ body {
 .btn-fetch:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .data-status { font-size: 13px; color: var(--fg-secondary); }
 .data-status.ok { color: var(--green); font-weight: 600; }
-.data-status.err { color: var(--accent); font-weight: 600; }
 
 /* ========== 分布图 ========== */
 .dist-container { overflow-x: auto; }
@@ -1141,6 +1166,94 @@ body {
   font-size: 13px;
   cursor: pointer;
 }
+
+/* 保存区验算结果 */
+.saved-verify-item {
+  margin-bottom: 8px;
+  padding: 8px;
+  background: var(--bg-dark);
+  border-radius: 6px;
+}
+.saved-verify-hit {
+  color: var(--gold);
+  font-weight: 700;
+}
+.saved-verify-miss {
+  opacity: 0.4;
+}
+
+/* 预测区 */
+.pred-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: var(--bg-dark);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+.pred-row-label {
+  font-size: 12px;
+  color: var(--fg-secondary);
+  min-width: 60px;
+}
+.pred-row-input {
+  flex: 1;
+  min-width: 200px;
+  background: var(--card-bg);
+  color: var(--fg-primary);
+  border: 1px solid var(--bg-light);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: Consolas, monospace;
+}
+.pred-row-input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+.pred-row-balls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.pred-ball {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-light);
+  color: var(--fg-secondary);
+  cursor: pointer;
+  transition: all .2s;
+}
+.pred-ball:hover { background: var(--accent); color: #fff; }
+.pred-ball.selected {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 6px rgba(30,144,255,.5);
+}
+.pred-ball.hit {
+  background: var(--gold);
+  color: #1a1a2e;
+}
+.pred-analyze-result {
+  padding: 10px;
+  background: var(--bg-dark);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.pred-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+  margin-top: 8px;
+}
+@media (max-width: 640px) {
+  .pred-grid { grid-template-columns: repeat(8, 1fr); }
+}
 </style>
 </head>
 <body>
@@ -1154,17 +1267,23 @@ body {
 
 <div class="container">
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('pick')">区间选号</button>
-    <button class="tab-btn" onclick="switchTab('sim')">模拟选号</button>
-    <button class="tab-btn" onclick="switchTab('trend')">走势分析</button>
-    <button class="tab-btn" onclick="switchTab('dist')">分布图</button>
-    <button class="tab-btn" onclick="switchTab('dist4')">4区分布</button>
-    <button class="tab-btn" onclick="switchTab('tail')">尾号走势</button>
-    <button class="tab-btn" onclick="switchTab('verify')">模拟验算</button>
+    <button class="tab-btn active" data-tab="pick">区间选号</button>
+    <button class="tab-btn" data-tab="sim">模拟选号</button>
+    <button class="tab-btn" data-tab="trend">走势分析</button>
+    <button class="tab-btn" data-tab="dist">分布图</button>
+    <button class="tab-btn" data-tab="dist4">4区分布</button>
+    <button class="tab-btn" data-tab="dist10">10区分布</button>
+    <button class="tab-btn" data-tab="tail">尾号走势</button>
+    <button class="tab-btn" data-tab="verify">模拟验算</button>
   </div>
 
   <!-- ========== 选号面板 ========== -->
   <div id="pickPanel" class="tab-panel active">
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button id="zoneMode8" class="btn-mode active" onclick="switchZoneMode(8)">8区选号</button>
+      <button id="zoneMode10" class="btn-mode" onclick="switchZoneMode(10)">10区选号</button>
+      <button id="zoneModeMix" class="btn-mode" onclick="switchZoneMode('mix')">混合选号</button>
+    </div>
     <div class="zone-grid" id="zoneGrid"></div>
 
     <div class="action-bar">
@@ -1177,13 +1296,13 @@ body {
     </div>
 
     <div id="pickResultArea" class="result-area" style="display:none;">
-      <h3 style="display:flex;align-items:center;justify-content:space-between;">选号结果 <span style="font-size:12px;color:var(--fg-secondary);font-weight:normal;" id="pickResultCount"></span></h3>
-      <div id="pickResultGroups"></div>
-      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+      <div style="margin-bottom:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
         <button class="btn-icon" onclick="copyCurrentPick()">📋 复制号码</button>
         <button class="btn-generate" onclick="importPickToSim()" style="padding:8px 18px;font-size:13px;background:linear-gradient(135deg,#2ed573,#1e90ff);">导入到模拟选号</button>
         <button class="btn-clear" onclick="clearPickResults()">清除结果</button>
       </div>
+      <h3 style="display:flex;align-items:center;justify-content:space-between;">选号结果 <span style="font-size:12px;color:var(--fg-secondary);font-weight:normal;" id="pickResultCount"></span></h3>
+      <div id="pickResultGroups"></div>
     </div>
   </div>
 
@@ -1236,9 +1355,22 @@ body {
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn-random" onclick="simAddRandomToSlip()" style="padding:8px 18px;font-size:13px;">机选一注加入选号单</button>
-          <button class="btn-generate" onclick="simImportSlipToVerify()" style="padding:8px 18px;font-size:13px;background:linear-gradient(135deg,#2ed573,#1e90ff);">导入到验算</button>
+          <button class="btn-generate" onclick="simSaveSlip()" style="padding:8px 18px;font-size:13px;background:linear-gradient(135deg,#2ed573,#1e90ff);">保存选号</button>
         </div>
       </div>
+    </div>
+
+    <!-- 保存区 -->
+    <div class="sim-slip" id="simSavedArea" style="margin-top:12px;display:none;">
+      <div class="sim-slip-header">
+        <h3><span style="display:inline-block;width:4px;height:16px;background:var(--green);border-radius:2px;"></span> 已保存选号 <span id="simSavedCount" style="font-size:13px;color:var(--fg-secondary);font-weight:normal;"></span></h3>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-icon" onclick="simVerifySaved()" style="font-size:12px;background:var(--accent);color:#fff;">验算当期</button>
+          <button class="btn-icon" onclick="simClearSaved()" style="font-size:12px;">清空</button>
+        </div>
+      </div>
+      <div class="sim-slip-list" id="simSavedList"></div>
+      <div id="simSavedResult" style="margin-top:8px;"></div>
     </div>
   </div>
 
@@ -1251,6 +1383,20 @@ body {
     </div>
 
     <div class="trend-tables-grid" id="trendTables"></div>
+
+    <!-- 预测区 -->
+    <div class="verify-card" style="margin-top:16px;">
+      <div class="verify-header">
+        <h3><span class="verify-title-bar" style="background:var(--green);"></span>预测区</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-icon" onclick="predAddRow()" style="font-size:12px;">+ 添加预测行</button>
+          <button class="btn-icon" onclick="predClearAll()" style="font-size:12px;">清空</button>
+          <button class="btn-generate" onclick="predAnalyze()" style="padding:6px 14px;font-size:12px;">更新分析</button>
+        </div>
+      </div>
+      <div id="predRows"></div>
+      <div id="predResult" style="margin-top:12px;"></div>
+    </div>
   </div>
 
   <!-- ========== 分布图面板 ========== -->
@@ -1260,6 +1406,20 @@ body {
       <span class="data-status" id="distStatus">未加载数据</span>
     </div>
     <div class="dist-container" id="distContainer"></div>
+    
+    <!-- 预测区 -->
+    <div class="verify-card" style="margin-top:16px;">
+      <div class="verify-header">
+        <h3><span class="verify-title-bar" style="background:var(--green);"></span>预测区</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-icon" onclick="predAddRow()" style="font-size:12px;">+ 添加预测行</button>
+          <button class="btn-icon" onclick="predClearAll()" style="font-size:12px;">清空</button>
+          <button class="btn-generate" onclick="predAnalyze()" style="padding:6px 14px;font-size:12px;">更新分析</button>
+        </div>
+      </div>
+      <div id="predRows"></div>
+      <div id="predResult" style="margin-top:12px;"></div>
+    </div>
   </div>
 
   <!-- ========== 4区分布图面板 ========== -->
@@ -1269,6 +1429,15 @@ body {
       <span class="data-status" id="dist4Status">未加载数据</span>
     </div>
     <div class="dist-container" id="dist4Container"></div>
+  </div>
+
+  <!-- ========== 10区分布图面板 ========== -->
+  <div id="dist10Panel" class="tab-panel">
+    <div class="data-bar">
+      <button class="btn-fetch" onclick="fetchData()">获取最新开奖数据</button>
+      <span class="data-status" id="dist10Status">未加载数据</span>
+    </div>
+    <div class="dist-container" id="dist10Container"></div>
   </div>
 
   <!-- ========== 尾号走势面板 ========== -->
@@ -1390,7 +1559,20 @@ const ZONES = [
   { id: 8, label: '第八区', range: [71, 80], color: '#ff6b81' },
 ];
 
+// 混合选号模式的8区间配置
+const ZONES_MIX = [
+  { id: 1, label: '区间一', range: [1, 10],  color: '#e53935' },
+  { id: 2, label: '区间二', range: [11, 20], color: '#f4511e' },
+  { id: 3, label: '区间三', range: [21, 30], color: '#fb8c00' },
+  { id: 4, label: '区间四', range: [31, 40], color: '#ffc107' },
+  { id: 5, label: '区间五', range: [41, 50], color: '#8bc34a' },
+  { id: 6, label: '区间六', range: [51, 60], color: '#00acc1' },
+  { id: 7, label: '区间七', range: [61, 70], color: '#1e88e5' },
+  { id: 8, label: '区间八', range: [71, 80], color: '#3949ab' },
+];
+
 // ==================== 状态 ====================
+let zoneMode = 8; // 8区、10区或'mix'混合模式
 let zoneCounts = [0, 0, 0, 0, 0, 0, 0, 0]; // 每区选几个
 let manualSelected = new Set();              // 手动点击选中的号码
 let drawData = [];                           // [{period, numbers}]
@@ -1400,7 +1582,10 @@ let pickedGroups = [];                        // 多组选号结果，每组为�
 function buildZoneGrid() {
   const grid = document.getElementById('zoneGrid');
   grid.innerHTML = '';
-  ZONES.forEach((z, idx) => {
+  
+  const zones = zoneMode === 10 ? ZONES10 : zoneMode === 'mix' ? ZONES_MIX : ZONES;
+  
+  zones.forEach((z, idx) => {
     const card = document.createElement('div');
     card.className = 'zone-card';
     card.style.setProperty('--zcolor', z.color);
@@ -1419,7 +1604,7 @@ function buildZoneGrid() {
       </h3>
       <div class="zone-count-ctrl">
         <button onclick="changeCount(${idx},-1)">−</button>
-        <span class="count-display" id="count-${idx}">0</span>
+        <span class="count-display" id="count-${idx}">${zoneCounts[idx] || 0}</span>
         <button onclick="changeCount(${idx},1)">+</button>
         <span style="font-size:12px;color:var(--fg-secondary);margin-left:4px;">个</span>
       </div>
@@ -1427,6 +1612,20 @@ function buildZoneGrid() {
     `;
     grid.appendChild(card);
   });
+}
+
+function switchZoneMode(mode) {
+  zoneMode = mode;
+  
+  document.getElementById('zoneMode8').classList.toggle('active', mode === 8);
+  document.getElementById('zoneMode10').classList.toggle('active', mode === 10);
+  document.getElementById('zoneModeMix').classList.toggle('active', mode === 'mix');
+  
+  const zones = mode === 10 ? ZONES10 : mode === 'mix' ? ZONES_MIX : ZONES;
+  zoneCounts = new Array(zones.length).fill(0);
+  
+  buildZoneGrid();
+  updateTotalPicked();
 }
 
 function changeCount(idx, delta) {
@@ -1455,10 +1654,12 @@ function toggleBall(n) {
 // ==================== 选号逻辑 ====================
 function generateNumbers() {
   const result = new Set();
+  
+  const zones = zoneMode === 10 ? ZONES10 : zoneMode === 'mix' ? ZONES_MIX : ZONES;
 
   // 按区选号：自选优先，不足随机补
-  ZONES.forEach((z, idx) => {
-    const count = zoneCounts[idx];
+  zones.forEach((z, idx) => {
+    const count = zoneCounts[idx] || 0;
     if (count <= 0) return;
 
     // 该区自选的号码
@@ -1844,8 +2045,25 @@ const ZONES4 = [
   { id: 4, label: '第四区', range: [61, 80], color: '#8e24aa' },
 ];
 
+const ZONES10 = [
+  { id: 1, label: '一区', range: [1, 8],   color: '#e53935' },
+  { id: 2, label: '二区', range: [9, 16],  color: '#f4511e' },
+  { id: 3, label: '三区', range: [17, 24], color: '#fb8c00' },
+  { id: 4, label: '四区', range: [25, 32], color: '#ffc107' },
+  { id: 5, label: '五区', range: [33, 40], color: '#8bc34a' },
+  { id: 6, label: '六区', range: [41, 48], color: '#43a047' },
+  { id: 7, label: '七区', range: [49, 56], color: '#00acc1' },
+  { id: 8, label: '八区', range: [57, 64], color: '#1e88e5' },
+  { id: 9, label: '九区', range: [65, 72], color: '#3949ab' },
+  { id: 10, label: '十区', range: [73, 80], color: '#8e24aa' },
+];
+
 function getZone4Counts(numbers) {
   return ZONES4.map(z => numbers.filter(n => n >= z.range[0] && n <= z.range[1]).length);
+}
+
+function getZone10Counts(numbers) {
+  return ZONES10.map(z => numbers.filter(n => n >= z.range[0] && n <= z.range[1]).length);
 }
 
 function buildDistribution4() {
@@ -1914,7 +2132,7 @@ function buildDistribution4() {
     const z4c = getZone4Counts(d.numbers);
     let rowHtml = '';
     z4c.forEach((c) => {
-      if (c >= 3) {
+      if (c >= 5) {
         rowHtml += `<td><span class="dist-stat-ball">${c}</span></td>`;
       } else {
         rowHtml += `<td><span class="dist-stat-num">${c}</span></td>`;
@@ -1975,6 +2193,142 @@ function buildDistribution4() {
       <table class="dist-table">
         <thead>
           <tr><th colspan="20" style="color:${zone.color};font-size:10px;">${zone.label} (${String(zone.range[0]).padStart(2,'0')}-${String(zone.range[1]).padStart(2,'0')})</th></tr>
+          <tr>${nums.map(n => `<th>${String(n).padStart(2,'0')}</th>`).join('')}</tr>
+        </thead>
+        <tbody>${tbodyHtml}</tbody>
+      </table>
+      <div class="zone-stat" style="--cols:${nums.length};">${statHtml}</div>
+    `;
+    zonesDiv.appendChild(zoneDiv);
+  });
+
+  main.appendChild(zonesDiv);
+  container.appendChild(main);
+}
+
+function buildDistribution10() {
+  const container = document.getElementById('dist10Container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const dataSlice = drawData.slice(0, 30).reverse();
+
+  const missings = {};
+  for (let n = 1; n <= 80; n++) {
+    missings[n] = [];
+    for (let i = 0; i < dataSlice.length; i++) {
+      if (dataSlice[i].numbers.includes(n)) {
+        missings[n][i] = 0;
+      } else {
+        let found = false;
+        for (let j = i + 1; j < dataSlice.length; j++) {
+          if (dataSlice[j].numbers.includes(n)) {
+            missings[n][i] = j - i;
+            found = true;
+            break;
+          }
+        }
+        missings[n][i] = found ? missings[n][i] : dataSlice.length - i;
+      }
+    }
+  }
+
+  const numberCounts = {};
+  for (let n = 1; n <= 80; n++) {
+    numberCounts[n] = dataSlice.filter(d => d.numbers.includes(n)).length;
+  }
+
+  const main = document.createElement('div');
+  main.className = 'dist-main';
+
+  const periodDiv = document.createElement('div');
+  periodDiv.className = 'dist-period-col';
+  periodDiv.innerHTML = `
+    <table class="dist-table">
+      <thead>
+        <tr><th colspan="2">期号</th></tr>
+        <tr><th style="width:16px;">序</th><th style="width:42px;">期号</th></tr>
+      </thead>
+      <tbody>
+        ${dataSlice.map((d, i) => `
+          <tr>
+            <td style="color:#999;font-size:8px;">${i+1}</td>
+            <td style="font-family:Consolas,monospace;font-size:8px;color:#333">${d.period.slice(-4)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    <div class="dist-footer-label">出现次数</div>
+  `;
+  main.appendChild(periodDiv);
+
+  const statDiv = document.createElement('div');
+  statDiv.className = 'dist-stat-col';
+  let statTbody = '';
+  dataSlice.forEach((d) => {
+    const z10c = getZone10Counts(d.numbers);
+    let rowHtml = '';
+    z10c.forEach((c) => {
+      if (c >= 3) {
+        rowHtml += `<td><span class="dist-stat-ball">${c}</span></td>`;
+      } else {
+        rowHtml += `<td><span class="dist-stat-num">${c}</span></td>`;
+      }
+    });
+    statTbody += `<tr>${rowHtml}</tr>`;
+  });
+  statDiv.innerHTML = `
+    <table class="dist-table">
+      <thead>
+        <tr><th colspan="10" style="color:#e53935;font-size:10px;">分区统计</th></tr>
+        <tr>${[1,2,3,4,5,6,7,8,9,10].map(i => `<th>${i}</th>`).join('')}</tr>
+      </thead>
+      <tbody>${statTbody}</tbody>
+    </table>
+    <div class="dist-footer-placeholder"></div>
+  `;
+  main.appendChild(statDiv);
+
+  const zonesDiv = document.createElement('div');
+  zonesDiv.className = 'dist-zones-row';
+
+  ZONES10.forEach((zone) => {
+    const zoneDiv = document.createElement('div');
+    zoneDiv.className = 'dist-zone-col';
+
+    const nums = [];
+    for (let n = zone.range[0]; n <= zone.range[1]; n++) nums.push(n);
+
+    let tbodyHtml = '';
+    dataSlice.forEach((d, rowIdx) => {
+      let rowHtml = '';
+      nums.forEach((n) => {
+        if (d.numbers.includes(n)) {
+          rowHtml += `<td class="hit"><span class="dist-ball">${String(n).padStart(2,'0')}</span></td>`;
+        } else {
+          const miss = missings[n][rowIdx];
+          rowHtml += `<td><span class="dist-miss">${miss}</span></td>`;
+        }
+      });
+      tbodyHtml += `<tr>${rowHtml}</tr>`;
+    });
+
+    const zoneMaxCount = Math.max(...nums.map(n => numberCounts[n]));
+    const statHtml = nums.map(n => {
+      const count = numberCounts[n];
+      const barHeight = zoneMaxCount > 0 ? Math.max(2, Math.round((count / zoneMaxCount) * 35)) : 0;
+      return `
+        <div class="zone-stat-cell">
+          <div class="zone-stat-count">${count}</div>
+          <div class="zone-stat-bar" style="height:${barHeight}px;"></div>
+        </div>
+      `;
+    }).join('');
+
+    zoneDiv.innerHTML = `
+      <table class="dist-table">
+        <thead>
+          <tr><th colspan="8" style="color:${zone.color};font-size:10px;">${zone.label} (${String(zone.range[0]).padStart(2,'0')}-${String(zone.range[1]).padStart(2,'0')})</th></tr>
           <tr>${nums.map(n => `<th>${String(n).padStart(2,'0')}</th>`).join('')}</tr>
         </thead>
         <tbody>${tbodyHtml}</tbody>
@@ -2275,6 +2629,11 @@ async function fetchData() {
       dist4StatusEl.textContent = `已加载 ${drawData.length} 期数据`;
       dist4StatusEl.className = 'data-status ok';
     }
+    const dist10StatusEl = document.getElementById('dist10Status');
+    if (dist10StatusEl) {
+      dist10StatusEl.textContent = `已加载 ${drawData.length} 期数据`;
+      dist10StatusEl.className = 'data-status ok';
+    }
     const tailStatusEl = document.getElementById('tailStatus');
     if (tailStatusEl) {
       tailStatusEl.textContent = `已加载 ${drawData.length} 期数据`;
@@ -2288,6 +2647,7 @@ async function fetchData() {
     buildTrendTables();
     buildDistribution();
     buildDistribution4();
+    buildDistribution10();
     buildTailTables();
     simUpdateCounts();  } catch (e) {
     console.error('获取数据失败:', e.message);
@@ -2316,12 +2676,13 @@ async function fetchData() {
         buildTrendTables();
         buildDistribution();
         buildDistribution4();
+        buildDistribution10();
         buildTailTables();
         return;
       } catch (e2) { /* ignore */ }
     }
-    statusEl.textContent = '获取失败：' + e.message;
-    statusEl.className = 'data-status err';
+    statusEl.textContent = '未加载数据';
+    statusEl.className = 'data-status';
   }
 }
 
@@ -2380,27 +2741,102 @@ function parseManualInput() {
   buildTrendTables();
   buildDistribution();
   buildDistribution4();
+  buildDistribution10();
   buildTailTables();
   closeManualModal();
 }
 
+// ==================== Tab 拖拽排序 ====================
+let dragTab = null;
+const tabOrder = ['pick', 'sim', 'trend', 'dist', 'dist4', 'dist10', 'tail', 'verify'];
+const tabNames = ['区间选号', '模拟选号', '走势分析', '分布图', '4区分布', '10区分布', '尾号走势', '模拟验算'];
+
+function initTabDrag() {
+  const tabsContainer = document.querySelector('.tabs');
+  const buttons = tabsContainer.querySelectorAll('.tab-btn');
+  
+  buttons.forEach((btn, index) => {
+    btn.draggable = true;
+    btn.dataset.tabIndex = index;
+    
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const idx = parseInt(btn.dataset.tabIndex);
+      switchTab(tabOrder[idx]);
+    });
+    
+    btn.addEventListener('dragstart', (e) => {
+      dragTab = btn;
+      btn.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    
+    btn.addEventListener('dragend', () => {
+      dragTab = null;
+      btn.classList.remove('dragging');
+      buttons.forEach(b => b.classList.remove('drag-over'));
+    });
+    
+    btn.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (dragTab !== btn) {
+        btn.classList.add('drag-over');
+      }
+    });
+    
+    btn.addEventListener('dragleave', () => {
+      btn.classList.remove('drag-over');
+    });
+    
+    btn.addEventListener('drop', (e) => {
+      e.preventDefault();
+      btn.classList.remove('drag-over');
+      
+      if (dragTab && dragTab !== btn) {
+        const dragIndex = parseInt(dragTab.dataset.tabIndex);
+        const dropIndex = parseInt(btn.dataset.tabIndex);
+        
+        if (dragIndex !== dropIndex) {
+          const container = tabsContainer;
+          
+          if (dragIndex < dropIndex) {
+            container.insertBefore(dragTab, btn.nextSibling);
+          } else {
+            container.insertBefore(dragTab, btn);
+          }
+          
+          const temp = tabOrder[dragIndex];
+          tabOrder[dragIndex] = tabOrder[dropIndex];
+          tabOrder[dropIndex] = temp;
+          
+          const tempName = tabNames[dragIndex];
+          tabNames[dragIndex] = tabNames[dropIndex];
+          tabNames[dropIndex] = tempName;
+          
+          buttons.forEach((b, i) => {
+            b.dataset.tabIndex = i;
+          });
+        }
+      }
+    });
+  });
+}
+
 // ==================== Tab 切换 ====================
 function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach((b, i) => {
-    b.classList.toggle('active',
-      (tab === 'pick' && i === 0) ||
-      (tab === 'sim' && i === 1) ||
-      (tab === 'trend' && i === 2) ||
-      (tab === 'dist' && i === 3) ||
-      (tab === 'dist4' && i === 4) ||
-      (tab === 'tail' && i === 5) ||
-      (tab === 'verify' && i === 6));
+  const tabsContainer = document.querySelector('.tabs');
+  const buttons = tabsContainer.querySelectorAll('.tab-btn');
+  
+  buttons.forEach((b, i) => {
+    b.classList.toggle('active', tabOrder[i] === tab);
   });
+  
   document.getElementById('pickPanel').classList.toggle('active', tab === 'pick');
   document.getElementById('simPanel').classList.toggle('active', tab === 'sim');
   document.getElementById('trendPanel').classList.toggle('active', tab === 'trend');
   document.getElementById('distPanel').classList.toggle('active', tab === 'dist');
   document.getElementById('dist4Panel').classList.toggle('active', tab === 'dist4');
+  document.getElementById('dist10Panel').classList.toggle('active', tab === 'dist10');
   document.getElementById('tailPanel').classList.toggle('active', tab === 'tail');
   document.getElementById('verifyPanel').classList.toggle('active', tab === 'verify');
 
@@ -2447,6 +2883,18 @@ function switchTab(tab) {
       }
     }
     if (drawData.length > 0) buildDistribution4();
+    else fetchData();
+  }
+
+  if (tab === 'dist10') {
+    if (drawData.length === 0) {
+      if (cached) {
+        drawData = JSON.parse(cached);
+        document.getElementById('dist10Status').textContent = `已加载 ${drawData.length} 期缓存数据`;
+        document.getElementById('dist10Status').className = 'data-status ok';
+      }
+    }
+    if (drawData.length > 0) buildDistribution10();
     else fetchData();
   }
 
@@ -2987,6 +3435,7 @@ function updatePrizeInfo() {
 document.addEventListener('DOMContentLoaded', () => {
   const ta = document.getElementById('verifyInput');
   if (ta) ta.addEventListener('input', updateVerifyCount);
+  initTabDrag();
 });
 
 // ==================== 模拟选号 ====================
@@ -3258,38 +3707,145 @@ function simRenderSlip() {
   countEl.textContent = `(${simSlipBets.length}注)`;
 }
 
-function simImportSlipToVerify() {
+// ==================== 保存区 ====================
+let savedSimBets = [];
+
+function simSaveSlip() {
   if (simSlipBets.length === 0) {
     showToast('选号单为空');
     return;
   }
-  // 检测是否有胆拖注
-  const hasDantuo = simSlipBets.some(bet => bet.dan.length > 0);
-  // 切换到验算面板
-  switchTab('verify');
-  // 如果有胆拖注，自动切换验算模式为胆拖
-  if (hasDantuo) {
-    const dantuoBtn = document.querySelector('.verify-mode-btn[onclick*="dantuo"]');
-    if (dantuoBtn) setVerifyMode('dantuo', dantuoBtn);
-  }
-  // 将选号单中的号码导入到验算输入框
-  const ta = document.getElementById('verifyInput');
-  const existing = ta.value.trim();
-  const lines = simSlipBets.map(bet => {
-    if (bet.dan.length > 0) {
-      // 胆拖格式：胆码|拖码
-      const danStr = bet.dan.map(n => String(n).padStart(2, '0')).join(' ');
-      const tuoStr = bet.tuo.map(n => String(n).padStart(2, '0')).join(' ');
-      return danStr + ' | ' + tuoStr;
-    } else {
-      // 复式格式
-      const allNums = [...bet.dan, ...bet.tuo].sort((a, b) => a - b);
-      return allNums.map(n => String(n).padStart(2, '0')).join(' ');
-    }
+  // 将选号单中的号码追加到保存区
+  simSlipBets.forEach(bet => {
+    savedSimBets.push({
+      id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+      type: bet.type,
+      typeName: bet.typeName,
+      dan: [...bet.dan],
+      tuo: [...bet.tuo],
+      bets: bet.bets,
+      cost: bet.cost,
+      time: bet.time,
+    });
   });
-  ta.value = existing ? existing + '\n' + lines.join('\n') : lines.join('\n');
-  updateVerifyCount();
-  showToast(`已导入 ${simSlipBets.length} 注选号到验算`);
+  simRenderSaved();
+  showToast(`已保存 ${simSlipBets.length} 注选号`);
+}
+
+function simRenderSaved() {
+  const area = document.getElementById('simSavedArea');
+  const listEl = document.getElementById('simSavedList');
+  const countEl = document.getElementById('simSavedCount');
+  const resultEl = document.getElementById('simSavedResult');
+
+  if (savedSimBets.length === 0) {
+    area.style.display = 'none';
+    return;
+  }
+  area.style.display = '';
+  countEl.textContent = `(${savedSimBets.length}注)`;
+
+  let totalBets = 0;
+  let totalCost = 0;
+
+  listEl.innerHTML = savedSimBets.map((bet, idx) => {
+    totalBets += bet.bets;
+    totalCost += bet.cost;
+
+    const danBalls = bet.dan.map(n =>
+      `<span class="s-ball dan-ball">${String(n).padStart(2,'0')}</span>`
+    ).join('');
+    const tuoBalls = bet.tuo.map(n =>
+      `<span class="s-ball">${String(n).padStart(2,'0')}</span>`
+    ).join('');
+
+    return `
+      <div class="sim-slip-bet">
+        <div class="sim-slip-bet-info">
+          <strong>${bet.typeName}</strong><br>
+          ${bet.bets}注 ${bet.cost}元
+          ${bet.dan.length > 0 ? '<br><span style="color:var(--gold);">胆' + bet.dan.length + '拖' + bet.tuo.length + '</span>' : ''}
+        </div>
+        <div class="sim-slip-bet-nums">
+          ${danBalls}${tuoBalls}
+        </div>
+        <button class="sim-slip-bet-del" onclick="simRemoveSaved('${bet.id}')">×</button>
+      </div>
+    `;
+  }).join('');
+
+  listEl.innerHTML += `
+    <div style="padding:8px;text-align:right;font-size:13px;color:var(--fg-secondary);">
+      保存合计：<strong>${totalBets}</strong> 注，<strong>${totalCost}</strong> 元
+    </div>
+  `;
+
+  resultEl.innerHTML = '';
+}
+
+function simRemoveSaved(id) {
+  savedSimBets = savedSimBets.filter(b => b.id !== id);
+  simRenderSaved();
+}
+
+function simClearSaved() {
+  if (savedSimBets.length === 0) return;
+  savedSimBets = [];
+  simRenderSaved();
+  showToast('已清空保存区');
+}
+
+function simVerifySaved() {
+  if (savedSimBets.length === 0) {
+    showToast('保存区为空');
+    return;
+  }
+  if (drawData.length === 0) {
+    showToast('请先获取开奖数据');
+    return;
+  }
+  // 取最新一期开奖数据
+  const latest = drawData[0];
+  const drawSet = new Set(latest.numbers);
+
+  let totalPrize = 0;
+  let totalWinBets = 0;
+
+  const html = savedSimBets.map((bet, idx) => {
+    const allNums = [...bet.dan, ...bet.tuo].sort((a, b) => a - b);
+    const hits = allNums.filter(n => drawSet.has(n));
+    const hitCount = hits.length;
+    const prize = getPrize(bet.type, hitCount);
+    const isWin = checkWin(bet.type, hitCount);
+    if (isWin) { totalPrize += prize; totalWinBets += bet.bets; }
+
+    const hitBalls = allNums.map(n => {
+      const isHit = drawSet.has(n);
+      return `<span class="verify-num-ball ${isHit ? '' : 'miss'}">${String(n).padStart(2, '0')}</span>`;
+    }).join('');
+
+    return `
+      <div class="saved-verify-item">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-size:13px;font-weight:600;">第${idx + 1}注 ${bet.typeName}</span>
+          <span>命中 <strong style="color:var(--accent);">${hitCount}</strong> 个 ${isWin ? '<span class="verify-hit-tag win">中奖 +' + formatPrize(prize) + '</span>' : '<span class="verify-hit-tag lose">未中奖</span>'}</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:2px;">${hitBalls}</div>
+        ${hits.length > 0 ? `<div style="font-size:12px;color:var(--fg-secondary);margin-top:4px;">命中: ${hits.map(n => String(n).padStart(2,'0')).join(', ')}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+
+  const summary = `
+    <div style="padding:10px;background:linear-gradient(135deg,#fff8e1,#fffde7);border-radius:8px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-around;">
+      <div><span style="font-size:12px;color:var(--fg-secondary);">验算期号</span><div style="font-size:16px;font-weight:700;">${latest.period}</div></div>
+      <div><span style="font-size:12px;color:var(--fg-secondary);">中奖注数</span><div style="font-size:16px;font-weight:700;color:var(--accent);">${totalWinBets}/${savedSimBets.reduce((s,b)=>s+b.bets,0)}</div></div>
+      <div><span style="font-size:12px;color:var(--fg-secondary);">总奖金</span><div style="font-size:16px;font-weight:700;color:var(--gold);">${formatPrize(totalPrize)}</div></div>
+    </div>
+  `;
+
+  document.getElementById('simSavedResult').innerHTML = summary + html;
+  showToast('验算完成');
 }
 
 // ==================== 区间选号导入到模拟选号 ====================
@@ -3340,10 +3896,152 @@ function importPickToSim() {
   }
 }
 
+// ==================== 预测区 ====================
+let predRows = []; // 每组 { id, numbers: Set() }
+
+function predAddRow() {
+  const id = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+  predRows.push({ id, numbers: new Set() });
+  predRenderRows();
+}
+
+function predRemoveRow(id) {
+  predRows = predRows.filter(r => r.id !== id);
+  predRenderRows();
+}
+
+function predMoveUp(id) {
+  const idx = predRows.findIndex(r => r.id === id);
+  if (idx <= 0) return;
+  [predRows[idx - 1], predRows[idx]] = [predRows[idx], predRows[idx - 1]];
+  predRenderRows();
+}
+
+function predClearAll() {
+  predRows = [];
+  predRenderRows();
+  document.getElementById('predResult').innerHTML = '';
+  showToast('已清空预测区');
+}
+
+function predToggleBall(rowId, num) {
+  const row = predRows.find(r => r.id === rowId);
+  if (!row) return;
+  if (row.numbers.has(num)) {
+    row.numbers.delete(num);
+  } else {
+    row.numbers.add(num);
+  }
+  predRenderRows();
+}
+
+function predSetFromInput(rowId, text) {
+  const row = predRows.find(r => r.id === rowId);
+  if (!row) return;
+  const nums = text.trim().split(/[\s,，]+/).map(s => parseInt(s)).filter(n => !isNaN(n) && n >= 1 && n <= 80);
+  row.numbers = new Set([...new Set(nums)].sort((a, b) => a - b));
+  predRenderRows();
+}
+
+function predRenderRows(context = 'main') {
+  const manager = getManager(context);
+  const container = document.getElementById(manager.containerId);
+  if (manager.rows.length === 0) {
+    container.innerHTML = '<div style="padding:12px;color:var(--fg-secondary);font-size:13px;text-align:center;">点击上方"添加预测行"开始预测</div>';
+    return;
+  }
+  container.innerHTML = manager.rows.map((row, idx) => {
+    const nums = [...row.numbers].sort((a, b) => a - b);
+    const inputVal = nums.map(n => String(n).padStart(2, '0')).join(' ');
+    return `
+      <div class="pred-row">
+        <span class="pred-row-label">预测区${idx + 1}</span>
+        <input type="text" class="pred-row-input" value="${inputVal}" placeholder="输入号码如 01 05 12..."
+          onchange="predSetFromInput('${row.id}', this.value, '${context}')">
+        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">
+          <button class="btn-icon" onclick="predMoveUp('${row.id}', '${context}')" style="font-size:11px;padding:4px 8px;" title="上移">↑</button>
+          <button class="btn-icon" onclick="predRemoveRow('${row.id}', '${context}')" style="font-size:11px;padding:4px 8px;" title="删除">×</button>
+        </div>
+        <div class="pred-grid" style="flex-basis:100%;margin-top:6px;">
+          ${Array.from({length: 80}, (_, i) => i + 1).map(n => {
+            const isSel = row.numbers.has(n);
+            return `<div class="pred-ball ${isSel ? 'selected' : ''}" onclick="predToggleBall('${row.id}', ${n}, '${context}')">${String(n).padStart(2,'0')}</div>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function predAnalyze(context = 'main') {
+  if (drawData.length === 0) {
+    showToast('请先获取开奖数据');
+    return;
+  }
+  const manager = getManager(context);
+  if (manager.rows.length === 0) {
+    showToast('请先添加预测行');
+    return;
+  }
+
+  const latest = drawData[0];
+  const drawSet = new Set(latest.numbers);
+  const dataSlice = drawData.slice(0, 30);
+
+  let html = '';
+  manager.rows.forEach((row, idx) => {
+    const nums = [...row.numbers].sort((a, b) => a - b);
+    if (nums.length === 0) return;
+
+    const hits = nums.filter(n => drawSet.has(n));
+    const hitCount = hits.length;
+
+    // 统计近30期各号码出现次数
+    const freq = {};
+    nums.forEach(n => {
+      freq[n] = dataSlice.filter(d => d.numbers.includes(n)).length;
+    });
+
+    // 统计各区分布
+    const zoneDist = new Array(8).fill(0);
+    nums.forEach(n => {
+      const zi = Math.floor((n - 1) / 10);
+      if (zi >= 0 && zi < 8) zoneDist[zi]++;
+    });
+
+    html += `
+      <div style="margin-bottom:10px;padding:10px;background:var(--bg-dark);border-radius:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <strong>预测区${idx + 1}</strong>
+          <span>选${nums.length}码，最新一期命中 <strong style="color:${hitCount > 0 ? 'var(--gold)' : 'var(--fg-secondary)'};">${hitCount}</strong> 个</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:6px;">
+          ${nums.map(n => {
+            const isHit = drawSet.has(n);
+            const f = freq[n];
+            return `<span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;font-size:12px;font-weight:600;${isHit ? 'background:var(--gold);color:#1a1a2e;' : 'background:var(--bg-light);color:var(--fg-secondary);'}">${String(n).padStart(2,'0')}</span>`;
+          }).join('')}
+        </div>
+        ${hits.length > 0 ? `<div style="font-size:12px;color:var(--gold);margin-bottom:4px;">命中: ${hits.map(n => String(n).padStart(2,'0')).join(', ')}</div>` : ''}
+        <div style="font-size:12px;color:var(--fg-secondary);display:flex;flex-wrap:wrap;gap:8px;">
+          <span>近30期出现次数:</span>
+          ${nums.map(n => `<span>${String(n).padStart(2,'0')}:${freq[n]}次</span>`).join(' ')}
+        </div>
+        <div style="font-size:12px;color:var(--fg-secondary);margin-top:4px;">
+          区间分布: ${zoneDist.map((c, i) => `第${i+1}区${c}个`).join('，')}
+        </div>
+      </div>
+    `;
+  });
+
+  document.getElementById(manager.resultId).innerHTML = html;
+}
+
 // ==================== 初始化 ====================
 buildZoneGrid();
 simBuildGrid();
 updatePrizeInfo();
+predAddRow('main');
 </script>
 </body>
 </html>
