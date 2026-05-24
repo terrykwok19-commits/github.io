@@ -1267,14 +1267,14 @@ body {
 
 <div class="container">
   <div class="tabs">
-    <button class="tab-btn active" data-tab="pick">区间选号</button>
-    <button class="tab-btn" data-tab="sim">模拟选号</button>
-    <button class="tab-btn" data-tab="trend">走势分析</button>
-    <button class="tab-btn" data-tab="dist">分布图</button>
-    <button class="tab-btn" data-tab="dist4">4区分布</button>
-    <button class="tab-btn" data-tab="dist10">10区分布</button>
-    <button class="tab-btn" data-tab="tail">尾号走势</button>
-    <button class="tab-btn" data-tab="verify">模拟验算</button>
+    <button class="tab-btn active" onclick="switchTab('pick')">区间选号</button>
+    <button class="tab-btn" onclick="switchTab('sim')">模拟选号</button>
+    <button class="tab-btn" onclick="switchTab('trend')">走势分析</button>
+    <button class="tab-btn" onclick="switchTab('dist')">传统8区分布图</button>
+    <button class="tab-btn" onclick="switchTab('dist4')">4区分布</button>
+    <button class="tab-btn" onclick="switchTab('dist10')">10区分布</button>
+    <button class="tab-btn" onclick="switchTab('tail')">尾号走势</button>
+    <button class="tab-btn" onclick="switchTab('verify')">模拟验算</button>
   </div>
 
   <!-- ========== 选号面板 ========== -->
@@ -1383,20 +1383,6 @@ body {
     </div>
 
     <div class="trend-tables-grid" id="trendTables"></div>
-
-    <!-- 预测区 -->
-    <div class="verify-card" style="margin-top:16px;">
-      <div class="verify-header">
-        <h3><span class="verify-title-bar" style="background:var(--green);"></span>预测区</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn-icon" onclick="predAddRow()" style="font-size:12px;">+ 添加预测行</button>
-          <button class="btn-icon" onclick="predClearAll()" style="font-size:12px;">清空</button>
-          <button class="btn-generate" onclick="predAnalyze()" style="padding:6px 14px;font-size:12px;">更新分析</button>
-        </div>
-      </div>
-      <div id="predRows"></div>
-      <div id="predResult" style="margin-top:12px;"></div>
-    </div>
   </div>
 
   <!-- ========== 分布图面板 ========== -->
@@ -1406,20 +1392,6 @@ body {
       <span class="data-status" id="distStatus">未加载数据</span>
     </div>
     <div class="dist-container" id="distContainer"></div>
-    
-    <!-- 预测区 -->
-    <div class="verify-card" style="margin-top:16px;">
-      <div class="verify-header">
-        <h3><span class="verify-title-bar" style="background:var(--green);"></span>预测区</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn-icon" onclick="predAddRow()" style="font-size:12px;">+ 添加预测行</button>
-          <button class="btn-icon" onclick="predClearAll()" style="font-size:12px;">清空</button>
-          <button class="btn-generate" onclick="predAnalyze()" style="padding:6px 14px;font-size:12px;">更新分析</button>
-        </div>
-      </div>
-      <div id="predRows"></div>
-      <div id="predResult" style="margin-top:12px;"></div>
-    </div>
   </div>
 
   <!-- ========== 4区分布图面板 ========== -->
@@ -1952,6 +1924,10 @@ function buildDistribution() {
       </tbody>
     </table>
     <div class="dist-footer-label">出现次数</div>
+    <div style="padding:8px 4px;display:flex;flex-direction:column;gap:6px;">
+      <button class="btn-icon" onclick="distAddPredRow()" style="font-size:11px;padding:6px 8px;width:100%;">+ 添加预测行</button>
+      <button class="btn-icon" onclick="distClearPred()" style="font-size:11px;padding:6px 8px;width:100%;">清空预测</button>
+    </div>
   `;
   main.appendChild(periodDiv);
 
@@ -2008,6 +1984,20 @@ function buildDistribution() {
       tbodyHtml += `<tr>${rowHtml}</tr>`;
     });
 
+    // 添加预测行
+    distPredRows.forEach((predRow, predIdx) => {
+      let predRowHtml = '';
+      nums.forEach((n) => {
+        const isPred = predRow.numbers.has(n);
+        if (isPred) {
+          predRowHtml += `<td class="hit" style="background:rgba(229,57,53,0.15);cursor:pointer;" onclick="distTogglePred(${n}, '${predRow.id}')"><span class="dist-ball">${String(n).padStart(2,'0')}</span></td>`;
+        } else {
+          predRowHtml += `<td style="background:#f5f5f5;cursor:pointer;" onclick="distTogglePred(${n}, '${predRow.id}')"><span style="font-size:8px;color:#999;">-</span></td>`;
+        }
+      });
+      tbodyHtml += `<tr>${predRowHtml}</tr>`;
+    });
+
     const zoneMaxCount = Math.max(...nums.map(n => numberCounts[n]));
     const statHtml = nums.map(n => {
       const count = numberCounts[n];
@@ -2028,6 +2018,12 @@ function buildDistribution() {
         </thead>
         <tbody>${tbodyHtml}</tbody>
       </table>
+      ${distPredRows.map((predRow, predIdx) => `
+        <div style="padding:4px 2px;text-align:center;font-size:9px;color:var(--green);font-weight:600;background:#e8f5e9;border-top:1px solid #d0d0d0;display:flex;align-items:center;justify-content:space-between;">
+          <span>预测行${predIdx + 1}</span>
+          <button onclick="distRemovePredRow('${predRow.id}')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:11px;padding:2px 6px;">删除</button>
+        </div>
+      `).join('')}
       <div class="zone-stat" style="--cols:${ballCount};">${statHtml}</div>
     `;
     zonesDiv.appendChild(zoneDiv);
@@ -2746,80 +2742,8 @@ function parseManualInput() {
   closeManualModal();
 }
 
-// ==================== Tab 拖拽排序 ====================
-let dragTab = null;
-const tabOrder = ['pick', 'sim', 'trend', 'dist', 'dist4', 'dist10', 'tail', 'verify'];
-const tabNames = ['区间选号', '模拟选号', '走势分析', '分布图', '4区分布', '10区分布', '尾号走势', '模拟验算'];
-
+// ==================== Tab 初始化 ====================
 function initTabDrag() {
-  const tabsContainer = document.querySelector('.tabs');
-  const buttons = tabsContainer.querySelectorAll('.tab-btn');
-  
-  buttons.forEach((btn, index) => {
-    btn.draggable = true;
-    btn.dataset.tabIndex = index;
-    
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      const idx = parseInt(btn.dataset.tabIndex);
-      switchTab(tabOrder[idx]);
-    });
-    
-    btn.addEventListener('dragstart', (e) => {
-      dragTab = btn;
-      btn.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    
-    btn.addEventListener('dragend', () => {
-      dragTab = null;
-      btn.classList.remove('dragging');
-      buttons.forEach(b => b.classList.remove('drag-over'));
-    });
-    
-    btn.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (dragTab !== btn) {
-        btn.classList.add('drag-over');
-      }
-    });
-    
-    btn.addEventListener('dragleave', () => {
-      btn.classList.remove('drag-over');
-    });
-    
-    btn.addEventListener('drop', (e) => {
-      e.preventDefault();
-      btn.classList.remove('drag-over');
-      
-      if (dragTab && dragTab !== btn) {
-        const dragIndex = parseInt(dragTab.dataset.tabIndex);
-        const dropIndex = parseInt(btn.dataset.tabIndex);
-        
-        if (dragIndex !== dropIndex) {
-          const container = tabsContainer;
-          
-          if (dragIndex < dropIndex) {
-            container.insertBefore(dragTab, btn.nextSibling);
-          } else {
-            container.insertBefore(dragTab, btn);
-          }
-          
-          const temp = tabOrder[dragIndex];
-          tabOrder[dragIndex] = tabOrder[dropIndex];
-          tabOrder[dropIndex] = temp;
-          
-          const tempName = tabNames[dragIndex];
-          tabNames[dragIndex] = tabNames[dropIndex];
-          tabNames[dropIndex] = tempName;
-          
-          buttons.forEach((b, i) => {
-            b.dataset.tabIndex = i;
-          });
-        }
-      }
-    });
-  });
 }
 
 // ==================== Tab 切换 ====================
@@ -2827,8 +2751,10 @@ function switchTab(tab) {
   const tabsContainer = document.querySelector('.tabs');
   const buttons = tabsContainer.querySelectorAll('.tab-btn');
   
-  buttons.forEach((b, i) => {
-    b.classList.toggle('active', tabOrder[i] === tab);
+  buttons.forEach((b) => {
+    const onclickValue = b.getAttribute('onclick');
+    const tabName = onclickValue.match(/switchTab\('(.+?)'\)/)?.[1];
+    b.classList.toggle('active', tabName === tab);
   });
   
   document.getElementById('pickPanel').classList.toggle('active', tab === 'pick');
@@ -3836,11 +3762,17 @@ function simVerifySaved() {
     `;
   }).join('');
 
+  const totalBets = savedSimBets.reduce((s,b)=>s+b.bets,0);
+  const totalCost = totalBets * SIM_PRICE;
+  const profit = totalPrize - totalCost;
+  
   const summary = `
     <div style="padding:10px;background:linear-gradient(135deg,#fff8e1,#fffde7);border-radius:8px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-around;">
       <div><span style="font-size:12px;color:var(--fg-secondary);">验算期号</span><div style="font-size:16px;font-weight:700;">${latest.period}</div></div>
-      <div><span style="font-size:12px;color:var(--fg-secondary);">中奖注数</span><div style="font-size:16px;font-weight:700;color:var(--accent);">${totalWinBets}/${savedSimBets.reduce((s,b)=>s+b.bets,0)}</div></div>
+      <div><span style="font-size:12px;color:var(--fg-secondary);">购买注数</span><div style="font-size:16px;font-weight:700;color:var(--fg-primary);">${totalBets} 注</div></div>
+      <div><span style="font-size:12px;color:var(--fg-secondary);">购买金额</span><div style="font-size:16px;font-weight:700;color:var(--fg-primary);">${totalCost} 元</div></div>
       <div><span style="font-size:12px;color:var(--fg-secondary);">总奖金</span><div style="font-size:16px;font-weight:700;color:var(--gold);">${formatPrize(totalPrize)}</div></div>
+      <div><span style="font-size:12px;color:var(--fg-secondary);">盈亏金额</span><div style="font-size:16px;font-weight:700;color:${profit >= 0 ? 'var(--green)' : 'var(--accent)'}">${profit >= 0 ? '+' : ''}${formatPrize(profit)}</div></div>
     </div>
   `;
 
@@ -3898,6 +3830,7 @@ function importPickToSim() {
 
 // ==================== 预测区 ====================
 let predRows = []; // 每组 { id, numbers: Set() }
+let distPredRows = []; // 分布图预测行 { id, numbers: Set() }
 
 function predAddRow() {
   const id = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
@@ -3924,6 +3857,33 @@ function predClearAll() {
   showToast('已清空预测区');
 }
 
+function distAddPredRow() {
+  const id = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+  distPredRows.push({ id, numbers: new Set() });
+  buildDistribution();
+}
+
+function distRemovePredRow(id) {
+  distPredRows = distPredRows.filter(r => r.id !== id);
+  buildDistribution();
+}
+
+function distTogglePred(num, rowId) {
+  const row = distPredRows.find(r => r.id === rowId);
+  if (!row) return;
+  if (row.numbers.has(num)) {
+    row.numbers.delete(num);
+  } else {
+    row.numbers.add(num);
+  }
+  buildDistribution();
+}
+
+function distClearPred() {
+  distPredRows = [];
+  buildDistribution();
+}
+
 function predToggleBall(rowId, num) {
   const row = predRows.find(r => r.id === rowId);
   if (!row) return;
@@ -3943,29 +3903,28 @@ function predSetFromInput(rowId, text) {
   predRenderRows();
 }
 
-function predRenderRows(context = 'main') {
-  const manager = getManager(context);
-  const container = document.getElementById(manager.containerId);
-  if (manager.rows.length === 0) {
+function predRenderRows() {
+  const container = document.getElementById('predRows');
+  if (predRows.length === 0) {
     container.innerHTML = '<div style="padding:12px;color:var(--fg-secondary);font-size:13px;text-align:center;">点击上方"添加预测行"开始预测</div>';
     return;
   }
-  container.innerHTML = manager.rows.map((row, idx) => {
+  container.innerHTML = predRows.map((row, idx) => {
     const nums = [...row.numbers].sort((a, b) => a - b);
     const inputVal = nums.map(n => String(n).padStart(2, '0')).join(' ');
     return `
       <div class="pred-row">
         <span class="pred-row-label">预测区${idx + 1}</span>
         <input type="text" class="pred-row-input" value="${inputVal}" placeholder="输入号码如 01 05 12..."
-          onchange="predSetFromInput('${row.id}', this.value, '${context}')">
+          onchange="predSetFromInput('${row.id}', this.value)">
         <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">
-          <button class="btn-icon" onclick="predMoveUp('${row.id}', '${context}')" style="font-size:11px;padding:4px 8px;" title="上移">↑</button>
-          <button class="btn-icon" onclick="predRemoveRow('${row.id}', '${context}')" style="font-size:11px;padding:4px 8px;" title="删除">×</button>
+          <button class="btn-icon" onclick="predMoveUp('${row.id}')" style="font-size:11px;padding:4px 8px;" title="上移">↑</button>
+          <button class="btn-icon" onclick="predRemoveRow('${row.id}')" style="font-size:11px;padding:4px 8px;" title="删除">×</button>
         </div>
         <div class="pred-grid" style="flex-basis:100%;margin-top:6px;">
           ${Array.from({length: 80}, (_, i) => i + 1).map(n => {
             const isSel = row.numbers.has(n);
-            return `<div class="pred-ball ${isSel ? 'selected' : ''}" onclick="predToggleBall('${row.id}', ${n}, '${context}')">${String(n).padStart(2,'0')}</div>`;
+            return `<div class="pred-ball ${isSel ? 'selected' : ''}" onclick="predToggleBall('${row.id}', ${n})">${String(n).padStart(2,'0')}</div>`;
           }).join('')}
         </div>
       </div>
@@ -3973,13 +3932,12 @@ function predRenderRows(context = 'main') {
   }).join('');
 }
 
-function predAnalyze(context = 'main') {
+function predAnalyze() {
   if (drawData.length === 0) {
     showToast('请先获取开奖数据');
     return;
   }
-  const manager = getManager(context);
-  if (manager.rows.length === 0) {
+  if (predRows.length === 0) {
     showToast('请先添加预测行');
     return;
   }
@@ -3989,7 +3947,7 @@ function predAnalyze(context = 'main') {
   const dataSlice = drawData.slice(0, 30);
 
   let html = '';
-  manager.rows.forEach((row, idx) => {
+  predRows.forEach((row, idx) => {
     const nums = [...row.numbers].sort((a, b) => a - b);
     if (nums.length === 0) return;
 
