@@ -176,6 +176,23 @@ body {
   transform: scale(1.1);
   box-shadow: 0 0 10px rgba(46,213,115,.5);
 }
+.ball.fixed {
+  background: var(--gold);
+  color: #1a1a2e;
+  border-color: transparent;
+  transform: scale(1.1);
+  box-shadow: 0 0 10px rgba(240,165,0,.5);
+  position: relative;
+}
+.ball.fixed::after {
+  content: '★';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 10px;
+  color: var(--gold);
+  text-shadow: 0 0 2px rgba(0,0,0,.5);
+}
 
 /* 操作栏 */
 .action-bar {
@@ -1288,6 +1305,8 @@ body {
 
     <div class="action-bar">
       <button class="btn-generate" onclick="generateNumbers()">智能选号</button>
+      <button class="btn-generate" onclick="batchGenerate(5)" style="background:linear-gradient(135deg,#2ed573,#1e90ff);">批量选号5组</button>
+      <button class="btn-generate" onclick="batchGenerate(10)" style="background:linear-gradient(135deg,#a55eea,#8854d0);">批量选号10组</button>
       <button class="btn-random" onclick="randomAll()">随机选号</button>
       <button class="btn-clear" onclick="clearAll()">清空</button>
       <div class="total-info">
@@ -1547,6 +1566,7 @@ const ZONES_MIX = [
 let zoneMode = 8; // 8区、10区或'mix'混合模式
 let zoneCounts = [0, 0, 0, 0, 0, 0, 0, 0]; // 每区选几个
 let manualSelected = new Set();              // 手动点击选中的号码
+let fixedNumbers = new Set();                // 双击固定的号码
 let drawData = [];                           // [{period, numbers}]
 let pickedGroups = [];                        // 多组选号结果，每组为一个排序数组
 
@@ -1566,7 +1586,7 @@ function buildZoneGrid() {
     let ballsHtml = '';
     for (let n = z.range[0]; n <= z.range[1]; n++) {
       const sn = String(n).padStart(2, '0');
-      ballsHtml += `<div class="ball" data-num="${n}" id="ball-${n}" onclick="toggleBall(${n})" style="--zcolor:${z.color}">${sn}</div>`;
+      ballsHtml += `<div class="ball" data-num="${n}" id="ball-${n}" onclick="toggleBall(${n})" ondblclick="toggleFixed(${n})" style="--zcolor:${z.color}">${sn}</div>`;
     }
 
     card.innerHTML = `
@@ -1623,37 +1643,65 @@ function toggleBall(n) {
   updateTotalPicked();
 }
 
+function toggleFixed(n) {
+  const ball = document.getElementById(`ball-${n}`);
+  if (fixedNumbers.has(n)) {
+    fixedNumbers.delete(n);
+    ball.classList.remove('fixed');
+    showToast(`已取消固定号码 ${String(n).padStart(2, '0')}`);
+  } else {
+    fixedNumbers.add(n);
+    ball.classList.add('fixed');
+    showToast(`已固定号码 ${String(n).padStart(2, '0')}`);
+  }
+}
+
 // ==================== 选号逻辑 ====================
 function generateNumbers() {
   const result = new Set();
   
   const zones = zoneMode === 10 ? ZONES10 : zoneMode === 'mix' ? ZONES_MIX : ZONES;
 
-  // 按区选号：自选优先，不足随机补
+  // 按区选号：固定号码优先，然后自选，不足随机补
   zones.forEach((z, idx) => {
     const count = zoneCounts[idx] || 0;
     if (count <= 0) return;
 
-    // 该区自选的号码
-    const manualInZone = [];
+    // 该区的固定号码
+    const fixedInZone = [];
     for (let n = z.range[0]; n <= z.range[1]; n++) {
-      if (manualSelected.has(n)) manualInZone.push(n);
+      if (fixedNumbers.has(n)) fixedInZone.push(n);
     }
 
-    if (manualInZone.length >= count) {
-      // 自选数量 >= 区间要求，从自选里随机挑count个
+    // 该区自选的号码（排除固定号码）
+    const manualInZone = [];
+    for (let n = z.range[0]; n <= z.range[1]; n++) {
+      if (manualSelected.has(n) && !fixedNumbers.has(n)) manualInZone.push(n);
+    }
+
+    // 先添加固定号码
+    fixedInZone.forEach(n => result.add(n));
+    const need = count - fixedInZone.length;
+
+    if (need <= 0) {
+      // 固定号码已经满足或超过区间要求
+      return;
+    }
+
+    if (manualInZone.length >= need) {
+      // 自选数量 >= 剩余需求，从自选里随机挑need个
       shuffle(manualInZone);
-      for (let i = 0; i < count; i++) result.add(manualInZone[i]);
+      for (let i = 0; i < need; i++) result.add(manualInZone[i]);
     } else {
-      // 自选数量 < 区间要求，先固定自选，再从非自选中随机补
+      // 自选数量 < 剩余需求，先添加自选，再从非固定、非自选中随机补
       manualInZone.forEach(n => result.add(n));
-      const need = count - manualInZone.length;
+      const remaining = need - manualInZone.length;
       const pool = [];
       for (let n = z.range[0]; n <= z.range[1]; n++) {
-        if (!manualSelected.has(n)) pool.push(n);
+        if (!fixedNumbers.has(n) && !manualSelected.has(n)) pool.push(n);
       }
       shuffle(pool);
-      for (let i = 0; i < need && i < pool.length; i++) result.add(pool[i]);
+      for (let i = 0; i < remaining && i < pool.length; i++) result.add(pool[i]);
     }
   });
 
@@ -1662,6 +1710,52 @@ function generateNumbers() {
 
   // 渲染结果
   renderResult([...result].sort((a, b) => a - b));
+}
+
+function batchGenerate(count) {
+  const totalNeeded = zoneCounts.reduce((sum, c) => sum + c, 0);
+  if (totalNeeded === 0) {
+    showToast('请先设定每区选号数量');
+    return;
+  }
+  
+  const zones = zoneMode === 10 ? ZONES10 : zoneMode === 'mix' ? ZONES_MIX : ZONES;
+  
+  for (let i = 0; i < count; i++) {
+    const result = new Set();
+    
+    zones.forEach((z, idx) => {
+      const zoneCount = zoneCounts[idx] || 0;
+      if (zoneCount <= 0) return;
+      
+      // 该区的固定号码
+      const fixedInZone = [];
+      for (let n = z.range[0]; n <= z.range[1]; n++) {
+        if (fixedNumbers.has(n)) fixedInZone.push(n);
+      }
+      
+      // 先添加固定号码
+      fixedInZone.forEach(n => result.add(n));
+      const need = zoneCount - fixedInZone.length;
+      
+      if (need <= 0) return;
+      
+      // 从非固定号码中随机选择
+      const pool = [];
+      for (let n = z.range[0]; n <= z.range[1]; n++) {
+        if (!fixedNumbers.has(n)) pool.push(n);
+      }
+      shuffle(pool);
+      for (let j = 0; j < need && j < pool.length; j++) {
+        result.add(pool[j]);
+      }
+    });
+    
+    pickedGroups.push([...result].sort((a, b) => a - b));
+  }
+  
+  renderPickResults();
+  showToast(`已生成${count}组选号`);
 }
 
 function randomAll() {
@@ -1680,8 +1774,9 @@ function clearAll() {
     document.getElementById(`count-${i}`).textContent = 0;
   });
   manualSelected.clear();
+  fixedNumbers.clear();
   document.querySelectorAll('.ball').forEach(b => {
-    b.classList.remove('selected', 'auto-picked');
+    b.classList.remove('selected', 'auto-picked', 'fixed');
   });
   document.getElementById('pickResultArea').style.display = 'none';
   updateTotalPicked();
