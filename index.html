@@ -3674,10 +3674,12 @@ function simRemoveBet(id) {
 }
 
 function simClearSlip() {
-  if (simSlipBets.length === 0) return;
+  if (simSlipBets.length === 0 && savedSimBets.length === 0) return;
   simSlipBets = [];
+  savedSimBets = [];
   simRenderSlip();
-  showToast('已清空选号单');
+  simRenderSaved();
+  showToast('已清空选号单和已保存选号');
 }
 
 function simRenderSlip() {
