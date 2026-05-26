@@ -3730,14 +3730,78 @@ function simRenderSlip() {
   countEl.textContent = `(${simSlipBets.length}注)`;
 }
 
+// GitHub 配置
+const GITHUB_CONFIG = {
+  username: 'terrykwok19-commits',
+  repo: 'terrykwok19-commits.github.io',
+  token: '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',
+  filePath: 'data.json'
+};
+
 // ==================== 保存区 ====================
 let savedSimBets = [];
+
+async function saveToGitHub(data) {
+  try {
+    // 先获取现有文件内容
+    const getUrl = `https://api.github.com/repos/${GITHUB_CONFIG.username}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.filePath}`;
+    
+    let sha = null;
+    try {
+      const getResponse = await fetch(getUrl, {
+        headers: {
+          'Authorization': `token ${GITHUB_CONFIG.token}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      });
+      
+      if (getResponse.ok) {
+        const fileData = await getResponse.json();
+        sha = fileData.sha;
+      }
+    } catch (e) {
+      console.log('文件不存在，将创建新文件');
+    }
+    
+    // 准备上传的数据
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+    const putData = {
+      message: `Update data.json - ${new Date().toLocaleString('zh-CN')}`,
+      content: content
+    };
+    
+    if (sha) {
+      putData.sha = sha;
+    }
+    
+    // 上传到GitHub
+    const putResponse = await fetch(getUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${GITHUB_CONFIG.token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      body: JSON.stringify(putData)
+    });
+    
+    if (putResponse.ok) {
+      return { success: true };
+    } else {
+      const errorData = await putResponse.json();
+      return { success: false, error: errorData.message };
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
 
 function simSaveSlip() {
   if (simSlipBets.length === 0) {
     showToast('选号单为空');
     return;
   }
+  
   // 将选号单中的号码追加到保存区
   simSlipBets.forEach(bet => {
     savedSimBets.push({
@@ -3751,8 +3815,17 @@ function simSaveSlip() {
       time: bet.time,
     });
   });
+  
   simRenderSaved();
-  showToast(`已保存 ${simSlipBets.length} 注选号`);
+  
+  // 保存到GitHub
+  saveToGitHub(savedSimBets).then(result => {
+    if (result.success) {
+      showToast(`已保存 ${simSlipBets.length} 注选号到GitHub`);
+    } else {
+      showToast(`已保存 ${simSlipBets.length} 注选号到本地，GitHub保存失败: ${result.error}`);
+    }
+  });
 }
 
 function simRenderSaved() {
@@ -3809,13 +3882,26 @@ function simRenderSaved() {
 function simRemoveSaved(id) {
   savedSimBets = savedSimBets.filter(b => b.id !== id);
   simRenderSaved();
+  saveToGitHub(savedSimBets).then(result => {
+    if (result.success) {
+      showToast('已删除并同步到GitHub');
+    } else {
+      showToast('已删除，GitHub同步失败');
+    }
+  });
 }
 
 function simClearSaved() {
   if (savedSimBets.length === 0) return;
   savedSimBets = [];
   simRenderSaved();
-  showToast('已清空保存区');
+  saveToGitHub(savedSimBets).then(result => {
+    if (result.success) {
+      showToast('已清空保存区并同步到GitHub');
+    } else {
+      showToast('已清空保存区，GitHub同步失败');
+    }
+  });
 }
 
 function simVerifySaved() {
