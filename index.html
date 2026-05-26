@@ -3740,7 +3740,9 @@ let savedSimBets = [];
 
 async function saveToCloudflare(data) {
   try {
-    const response = await fetch(`${API_CONFIG.url}save`, {
+    console.log('开始保存到云服务，数据:', data);
+    
+    const response = await fetch(API_CONFIG.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -3748,13 +3750,25 @@ async function saveToCloudflare(data) {
       body: JSON.stringify(data)
     });
     
+    console.log('响应状态:', response.status, response.statusText);
+    
     if (response.ok) {
+      const result = await response.json();
+      console.log('保存成功:', result);
       return { success: true };
     } else {
-      const errorData = await response.json();
-      return { success: false, error: errorData.message || '保存失败' };
+      let errorText = '保存失败';
+      try {
+        const errorData = await response.json();
+        errorText = errorData.message || errorData.error || JSON.stringify(errorData);
+      } catch (e) {
+        errorText = await response.text();
+      }
+      console.error('保存失败:', errorText);
+      return { success: false, error: errorText };
     }
   } catch (error) {
+    console.error('保存异常:', error);
     return { success: false, error: error.message };
   }
 }
