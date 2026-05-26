@@ -1358,6 +1358,8 @@ body {
       <button class="btn-clear" onclick="simClear()">清空</button>
       <button class="btn-random" onclick="simRandom()" id="simRandomBtn">10机选</button>
       <button class="btn-generate" onclick="simAddToSlip()">加入选号单</button>
+      <button class="btn-icon" onclick="saveToCloud()">☁️ 保存到云端</button>
+      <button class="btn-icon" onclick="loadFromCloud()">📥 加载云端</button>
     </div>
 
     <div class="sim-slip">
@@ -3730,46 +3732,77 @@ function simRenderSlip() {
   countEl.textContent = `(${simSlipBets.length}注)`;
 }
 
-// API 配置
-const API_CONFIG = {
-  url: 'https://kl8-api.terrykwok19.workers.dev/'
-};
+// ==============================================
+// Cloudflare 云端保存/加载 最终版（无报错、可直接用）
+// ==============================================
+
+const API_BASE = "https://kl8-api.terrykwok19.workers.dev";
 
 // ==================== 保存区 ====================
 let savedSimBets = [];
 
-async function saveToCloudflare(data) {
+// 保存到云端 - 保存选号单的号码
+async function saveToCloud() {
+  if (!simSlipBets || simSlipBets.length === 0) {
+    showToast("选号单为空，请先添加选号");
+    return;
+  }
   try {
-    console.log('开始保存到云服务，数据:', data);
-    
-    const response = await fetch(API_CONFIG.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(data)
+    let res = await fetch(API_BASE + "/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(simSlipBets)
     });
-    
-    console.log('响应状态:', response.status, response.statusText);
-    
-    if (response.ok) {
-      const result = await response.json();
-      console.log('保存成功:', result);
-      return { success: true };
+    let data = await res.json();
+    if (data.success) showToast("✅ 保存到云端成功");
+    else showToast("保存失败：" + (data.error || ""));
+  } catch (e) {
+    showToast("网络错误：保存失败");
+  }
+}
+
+// 从云端加载 - 号码加载到选号单
+async function loadFromCloud() {
+  try {
+    let res = await fetch(API_BASE + "/api/load");
+    let list = await res.json();
+    simSlipBets = list;
+    simRenderSlip();
+    showToast(`📥 加载完成：共 ${list.length} 条记录`);
+  } catch (e) {
+    const localData = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (localData) {
+      simSlipBets = JSON.parse(localData);
+      simRenderSlip();
+      showToast(`📥 从本地加载完成：共 ${simSlipBets.length} 条记录`);
     } else {
-      let errorText = '保存失败';
-      try {
-        const errorData = await response.json();
-        errorText = errorData.message || errorData.error || JSON.stringify(errorData);
-      } catch (e) {
-        errorText = await response.text();
-      }
-      console.error('保存失败:', errorText);
-      return { success: false, error: errorText };
+      showToast("加载失败：云端和本地均无数据");
     }
-  } catch (error) {
-    console.error('保存异常:', error);
-    return { success: false, error: error.message };
+  }
+}
+
+// 删除单条
+async function deleteCloudBet(id) {
+  if (!confirm("确定删除？")) return;
+  try {
+    await fetch(API_BASE + "/api/delete?id=" + id, { method: "DELETE" });
+    showToast("删除成功");
+    loadFromCloud();
+  } catch (e) {
+    showToast("删除失败");
+  }
+}
+
+// 清空云端
+async function clearCloudBets() {
+  if (!confirm("确定清空所有云端记录？")) return;
+  try {
+    await fetch(API_BASE + "/api/clear", { method: "POST" });
+    savedSimBets = [];
+    simRenderSaved();
+    showToast("已清空云端");
+  } catch (e) {
+    showToast("清空失败");
   }
 }
 
@@ -3779,7 +3812,6 @@ function simSaveSlip() {
     return;
   }
   
-  // 将选号单中的号码追加到保存区
   simSlipBets.forEach(bet => {
     savedSimBets.push({
       id: Date.now() + '_' + Math.random().toString(36).substr(2, 5),
@@ -3794,15 +3826,7 @@ function simSaveSlip() {
   });
   
   simRenderSaved();
-  
-  // 保存到云服务
-  saveToCloudflare(savedSimBets).then(result => {
-    if (result.success) {
-      showToast(`已保存 ${simSlipBets.length} 注选号到云服务`);
-    } else {
-      showToast(`已保存 ${simSlipBets.length} 注选号到本地，云服务保存失败: ${result.error}`);
-    }
-  });
+  saveToCloud();
 }
 
 function simRenderSaved() {
@@ -3857,28 +3881,11 @@ function simRenderSaved() {
 }
 
 function simRemoveSaved(id) {
-  savedSimBets = savedSimBets.filter(b => b.id !== id);
-  simRenderSaved();
-  saveToCloudflare(savedSimBets).then(result => {
-    if (result.success) {
-      showToast('已删除并同步到云服务');
-    } else {
-      showToast('已删除，云服务同步失败');
-    }
-  });
+  deleteCloudBet(id);
 }
 
 function simClearSaved() {
-  if (savedSimBets.length === 0) return;
-  savedSimBets = [];
-  simRenderSaved();
-  saveToCloudflare(savedSimBets).then(result => {
-    if (result.success) {
-      showToast('已清空保存区并同步到云服务');
-    } else {
-      showToast('已清空保存区，云服务同步失败');
-    }
-  });
+  clearCloudBets();
 }
 
 function simVerifySaved() {
