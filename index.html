@@ -3781,12 +3781,12 @@ function simSaveSlip() {
   
   simRenderSaved();
   
-  // 保存到GitHub
-  saveToGitHub(savedSimBets).then(result => {
+  // 保存到云服务
+  saveToCloudflare(savedSimBets).then(result => {
     if (result.success) {
-      showToast(`已保存 ${simSlipBets.length} 注选号到GitHub`);
+      showToast(`已保存 ${simSlipBets.length} 注选号到云服务`);
     } else {
-      showToast(`已保存 ${simSlipBets.length} 注选号到本地，GitHub保存失败: ${result.error}`);
+      showToast(`已保存 ${simSlipBets.length} 注选号到本地，云服务保存失败: ${result.error}`);
     }
   });
 }
@@ -3845,11 +3845,11 @@ function simRenderSaved() {
 function simRemoveSaved(id) {
   savedSimBets = savedSimBets.filter(b => b.id !== id);
   simRenderSaved();
-  saveToGitHub(savedSimBets).then(result => {
+  saveToCloudflare(savedSimBets).then(result => {
     if (result.success) {
-      showToast('已删除并同步到GitHub');
+      showToast('已删除并同步到云服务');
     } else {
-      showToast('已删除，GitHub同步失败');
+      showToast('已删除，云服务同步失败');
     }
   });
 }
